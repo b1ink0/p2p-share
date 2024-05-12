@@ -1,16 +1,19 @@
 <script lang="ts">
-  import { file, peer, receiveData, status, sdp } from "./store/store";
   import { onMount } from "svelte";
+  import { file, status, sdp, currentId, receiveId } from "./store/store";
   import Button from "./components/Button.svelte";
   import {
     addAnswer,
     createAnswer,
     createOffer,
-    createPeerConnection,
     reset,
     saveFile,
     send,
+    connect,
+    receive,
   } from "./lib/webrtc";
+
+  let manualMode = false;
 
   const handleFileChange = (e: any) => {
     file.set(e.target.files[0]);
@@ -37,25 +40,45 @@
     localsdp = value;
   });
 
+  let id = "";
+  currentId.subscribe((value) => {
+    id = value;
+  });
+
+  let localReceiveId = "";
+  const handleChangeReceiveId = (e: any) => {
+    localReceiveId = e.target.value;
+    receiveId.set(e.target.value);
+  };
+
+  //   const handleSend = async () =>
+
   onMount(() => {
-    createPeerConnection();
+    // createPeerConnection();
   });
 </script>
 
 <main class="flex flex-col justify-center items-center w-full">
   <div
-    class="w-fit border-2 p-4 m-4 rounded-md gap-4 flex justify-center items-center flex-col"
+    class="w-fit border-2 p-4 m-10 rounded-md gap-4 flex justify-center items-center flex-col"
   >
-    <h1 class="text-2xl">P2P File Transfer</h1>
+    <h1 class="text-2xl font-medium">P2P File Transfer</h1>
     <div class="flex gap-4 flex-col justify-center items-center">
-      <div class="flex gap-3">
-        <Button onClick={createOffer} text="Create Peer Connection" />
-        <Button onClick={createAnswer} text="Connect to Peer" />
-        <Button onClick={addAnswer} text="Add remote to Peer" />
-      </div>
+      {#if manualMode}
+        <div class="flex gap-3">
+          <Button onClick={() => createOffer()} text="Create Peer Connection" />
+          <Button onClick={() => createAnswer()} text="Connect to Peer" />
+          <Button onClick={() => addAnswer()} text="Add remote to Peer" />
+        </div>
+      {/if}
       <div style={`color: ${connectionStatus ? "green" : "red"}`}>
         Connection Status: {connectionStatus ? "Connected" : "Disconnected"}
       </div>
+      {#if id !== ""}
+        <div class="flex justify-center items-center gap-3">
+          Share ID : {id}
+        </div>
+      {/if}
       <div class="flex justify-center items-center flex-col gap-3">
         <div
           class="flex w-64 h-16 border-2 relative border-dashed rounded-md justify-center items-center"
@@ -74,30 +97,64 @@
             <span>Drag and drop file here</span>
           {/if}
         </div>
-        <Button onClick={send} text="Send" />
-      </div>
-      <div class="flex justify-center items-center gap-2 flex-col">
-        <span>{progress}%</span>
-        <div class="w-64 h-2 bg-gray-200 rounded-md overflow-hidden">
-          <div class="h-2 bg-blue-500" style="width: {progress}%"></div>
-        </div>
-      </div>
-      <div>
-        {#if progress === 100}
-          <Button onClick={saveFile} text="Save File" />
-          <Button onClick={reset} text="Reset" />
+        {#if connectionStatus}
+          <Button onClick={send} text="Send" />
+        {:else}
+          <Button onClick={connect} text="Connect" />
         {/if}
       </div>
-      <div class="w-full flex justify-center items-center flex-col gap-3">
-        <textarea
-          class="border-2 rounded-md w-full h-32 p-2 bg-transparent"
-          value={localsdp}
-        ></textarea>
-        <Button
-          onClick={() => navigator.clipboard.writeText(localsdp)}
-          text="Copy SDP"
-        />
+
+      {#if progress !== 0}
+        <span class="block h-[2px] w-full bg-white"></span>
+        <div class="flex justify-center items-center gap-2 flex-col">
+          <span>{progress}%</span>
+          <div class="w-64 h-2 bg-gray-200 rounded-md overflow-hidden">
+            <div class="h-2 bg-blue-500" style="width: {progress}%"></div>
+          </div>
+        </div>
+      {/if}
+      {#if progress === 100}
+        <div>
+          <Button onClick={saveFile} text="Save File" />
+          <Button onClick={reset} text="Reset" />
+        </div>
+      {/if}
+      <div class="flex gap-3 justify-center items-center w-full">
+        <span class="block h-[2px] w-full bg-white"></span>
+        <span>or</span>
+        <span class="block h-[2px] w-full bg-white"></span>
       </div>
+      <div class="flex gap-4">
+        <input
+          class="bg-transparent border-2 px-2 rounded-md"
+          type="text"
+          placeholder="Enter ID"
+          value={localReceiveId}
+          on:input={handleChangeReceiveId}
+        />
+        <Button onClick={receive} text="Receive" />
+      </div>
+      {#if manualMode}
+        <div class="w-full flex justify-center items-center flex-col gap-3">
+          <textarea
+            class="border-2 rounded-md w-full h-32 p-2 bg-transparent"
+            value={localsdp}
+          ></textarea>
+          <Button
+            onClick={() => navigator.clipboard.writeText(localsdp)}
+            text="Copy SDP"
+          />
+        </div>
+      {/if}
+    </div>
+    <span class="block h-[2px] w-full bg-white mt-3"></span>
+    <div class="flex gap-4">
+      <Button
+        onClick={() => {
+          manualMode = !manualMode;
+        }}
+        text="Toggle Manual Mode"
+      />
     </div>
   </div>
 </main>

@@ -1,16 +1,62 @@
 import { get } from "svelte/store";
-import { peer, config, file, receiveData, status, sdp } from "../store/store";
+import axios from "axios";
+import {
+  peer,
+  config,
+  file,
+  receiveData,
+  status,
+  sdp,
+  currentId,
+  stopCheckingForAnswer,
+  receiveId,
+} from "../store/store";
 
-const createPeerConnection = (): void => {
+// Generate a random 4-digit number
+function generateId() {
+  // Generate a random number between 1000 and 9999 (inclusive)
+  const min = 1000;
+  const max = 9999;
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+const checkForAnswer = async (i: number = 0): Promise<void> => {
+  if (i > 20 || get(stopCheckingForAnswer)) return;
+
+  try {
+    const response = await axios.get(
+      `${import.meta.env.VITE_SIGNALING_SERVER_URL}/getanswer/${get(currentId)}`
+    );
+    if (response.data.answer) {
+      console.log(response.data);
+      await addAnswer(response.data.answer);
+    } else {
+      setTimeout(() => {
+        checkForAnswer(i + 1);
+      }, 1000);
+    }
+  } catch (error) {
+    console.log("Error:", error);
+    setTimeout(() => {
+      checkForAnswer(i + 1);
+    }, 1000);
+  }
+};
+
+const createPeerConnection = (type: string = ""): void => {
   const localPeer = new RTCPeerConnection(config.rtcConfig as RTCConfiguration);
   peer.dataChannel.set(createDataChannel(localPeer, "dataChannel"));
   // localPeer.on
   localPeer.onicecandidate = async (event) => {
     if (!event.candidate) return;
-    console.log(localPeer.localDescription);
+    console.log("onice", localPeer.localDescription);
     sdp.set(JSON.stringify(localPeer.localDescription));
-    // await requestServer({ candidate: event.candidate });
+    if (type === "answer") return;
+    const id = generateId();
+    currentId.set(id.toString());
+    await postRequest({ id: id, offer: localPeer.localDescription }, "offer");
   };
+  console.log(localPeer);
   peer.connection.set(localPeer);
 };
 
@@ -22,47 +68,72 @@ const createOffer = async (): Promise<void> => {
     const offer = await connection.createOffer();
     await connection.setLocalDescription(offer);
     console.log(offer);
+
+    // await postRequest({ id: id, offer: offer }, "offer");
+    await checkForAnswer();
   });
 };
 
-const createAnswer = async (): Promise<void> => {
+const createAnswer = async (offer: string = ""): Promise<void> => {
   const connection = peer.connection;
   connection.subscribe(async (connection) => {
     if (!connection) return;
-    const offer = JSON.parse(
-      prompt("Enter offer from other peer") as string
-    ) as RTCSessionDescription;
-    await connection.setRemoteDescription(offer);
+    let localOffer: RTCSessionDescription;
+    console.log(offer);
+    if (offer === "") {
+      localOffer = JSON.parse(
+        prompt("Enter offer from other peer") as string
+      ) as RTCSessionDescription;
+    } else {
+      localOffer = JSON.parse(offer) as RTCSessionDescription;
+    }
 
-    const answer = await connection.createAnswer();
-    await connection.setLocalDescription(answer);
-    console.log(answer);
+    console.log(localOffer);
+    setTimeout(async () => {
+      await connection.setRemoteDescription(localOffer);
+
+      const answer = await connection.createAnswer();
+      await connection.setLocalDescription(answer);
+      console.log(answer);
+
+      await postRequest({ id: get(receiveId), answer: answer }, "answer");
+    }, 1000);
   });
 };
 
-const addAnswer = async (): Promise<void> => {
+const addAnswer = async (answer: string = ""): Promise<void> => {
   const connection = peer.connection;
-  const dataChannel = peer.dataChannel;
   connection.subscribe(async (connection) => {
     if (!connection) return;
-    const answer = JSON.parse(
-      prompt("Enter answer from other peer") as string
-    ) as RTCSessionDescription;
-    await connection.setRemoteDescription(answer);
+    let localAnswer: RTCSessionDescription;
+    if (answer === "") {
+      localAnswer = JSON.parse(
+        prompt("Enter offer from other peer") as string
+      ) as RTCSessionDescription;
+    } else {
+      localAnswer = JSON.parse(answer) as RTCSessionDescription;
+    }
+    console.log(localAnswer);
+    await connection.setRemoteDescription(localAnswer);
   });
 };
 
-const requestServer = async (data: Object): Promise<Object> => {
-  //   const response = await fetch("http://localhost:3000", {
-  // method: "POST",
-  // headers: {
-  //   "Content-Type": "application/json",
-  // },
-  // body: JSON.stringify(data),
-  //   });
-  //   return response.json();
-  console.log(data);
-  return {};
+const postRequest = async (data: Object, type: string): Promise<string> => {
+  const response = await axios.post(
+    `${import.meta.env.VITE_SIGNALING_SERVER_URL}/${type}`,
+    data
+  );
+  const resData = response.data;
+  console.log(resData);
+  return resData[type];
+};
+
+const getRequest = async (id: string, type: string): Promise<Object> => {
+  const response = await axios.get(
+    `${import.meta.env.VITE_SIGNALING_SERVER_URL}/${type}/${id}`
+  );
+  const resData = response.data;
+  return resData;
 };
 
 const createDataChannel = (
@@ -110,6 +181,7 @@ const createDataChannel = (
       });
     }
   };
+  console.log(dataChannel);
 
   receiveData.bytesReceived.subscribe((bytesReceived) => {
     const fileInfo = get(receiveData.fileInfo);
@@ -140,9 +212,17 @@ const send = (): void => {
   const dataChannel = peer.dataChannel;
   dataChannel.subscribe((dataChannel) => {
     if (!dataChannel) return;
-    console.log(dataChannel);
     file.subscribe((file) => {
-      if (!file) return;
+      if (!file) {
+        alert("Please select a file to send");
+        return;
+      }
+
+      if (dataChannel.readyState !== "open") {
+        alert("Please connect to peer first");
+        return;
+      }
+
       const BYTES_PER_CHUNK = 1200;
       let currentChunk = 0;
       let fileReader = new FileReader();
@@ -188,12 +268,20 @@ const saveFile = (): void => {
   a.click();
 };
 
-const receive = (): void => {
-  const dataChannel = peer.dataChannel;
-  dataChannel.subscribe((dataChannel) => {
-    console.log(dataChannel);
-    if (!dataChannel) return;
-  });
+const connect = async (): Promise<void> => {
+  await createPeerConnection("offer");
+  setTimeout(async () => {
+    await createOffer();
+  }, 1000);
+};
+
+const receive = async (): Promise<void> => {
+  createPeerConnection("answer");
+  setTimeout(async () => {
+    const remoteOffer = await getRequest(get(receiveId), "getoffer");
+    console.log("re", remoteOffer);
+    await createAnswer(remoteOffer.offer);
+  }, 1000);
 };
 
 const reset = (): void => {
@@ -217,4 +305,5 @@ export {
   receive,
   saveFile,
   reset,
+  connect,
 };

@@ -35,3 +35,10 @@ export const status = {
 };
 
 export const sdp = writable<string | null>(null);
+
+export const currentId = writable<string>("");
+
+export const stopCheckingForAnswer = writable<boolean>(false);
+
+export const receiveId = writable<string>("");
+

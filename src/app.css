@@ -3,8 +3,24 @@
 @tailwind utilities;
 
 body {
-  background-color: #220245;
-  color: #fff;
+  background-color: #271819;
+  color: #d7d7d7;
+  font-family: "Poppins", sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+* {
+  border-color: #ff94a1;
+}
+
+.bg-white {
+  background: #ff94a1;
+}
+
+input {
+  outline: none;
 }
 
 ::-webkit-scrollbar {

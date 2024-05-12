@@ -6,6 +6,6 @@
   export let className = "";
 </script>
 
-<button class={`${className} border-2 px-2 rounded-md bg-slate-600 hover:bg-slate-500 transition-all`} {type} on:click={onClick} {disabled}>
+<button class={`${className} py-1 px-3 rounded-md bg-[#ff4d62] hover:bg-[#ff8896] transition-all`} {type} on:click={onClick} {disabled}>
   {text}
 </button>
