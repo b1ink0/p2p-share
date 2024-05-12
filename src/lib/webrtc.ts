@@ -1,5 +1,5 @@
 import { get } from "svelte/store";
-import { peer, config, file, receiveData, status } from "../store/store";
+import { peer, config, file, receiveData, status, sdp } from "../store/store";
 
 const createPeerConnection = (): void => {
   const localPeer = new RTCPeerConnection(config.rtcConfig as RTCConfiguration);
@@ -8,6 +8,7 @@ const createPeerConnection = (): void => {
   localPeer.onicecandidate = async (event) => {
     if (!event.candidate) return;
     console.log(localPeer.localDescription);
+    sdp.set(JSON.stringify(localPeer.localDescription));
     // await requestServer({ candidate: event.candidate });
   };
   peer.connection.set(localPeer);

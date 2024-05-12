@@ -33,3 +33,5 @@ export const status = {
   received: writable<boolean>(false),
   sent: writable<boolean>(false),
 };
+
+export const sdp = writable<string | null>(null);

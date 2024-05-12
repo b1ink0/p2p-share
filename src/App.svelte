@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { file, peer, receiveData, status } from "./store/store";
+  import { file, peer, receiveData, status, sdp } from "./store/store";
   import { onMount } from "svelte";
   import Button from "./components/Button.svelte";
   import {
@@ -32,6 +32,11 @@
     fileInfo = { name: value.name, size: value.size };
   });
 
+  let localsdp = "";
+  sdp.subscribe((value) => {
+    localsdp = value;
+  });
+
   onMount(() => {
     createPeerConnection();
   });
@@ -61,7 +66,10 @@
             on:change={handleFileChange}
           />
           {#if fileInfo.name}
-            <span class="text-ellipsis overflow-hidden w-[70%] whitespace-nowrap">{fileInfo.name} - {fileInfo.size} bytes</span>
+            <span
+              class="text-ellipsis overflow-hidden w-[70%] whitespace-nowrap"
+              >{fileInfo.name} - {fileInfo.size} bytes</span
+            >
           {:else}
             <span>Drag and drop file here</span>
           {/if}
@@ -80,7 +88,16 @@
           <Button onClick={reset} text="Reset" />
         {/if}
       </div>
-      <div></div>
+      <div class="w-full flex justify-center items-center flex-col gap-3">
+        <textarea
+          class="border-2 rounded-md w-full h-32 p-2 bg-transparent"
+          value={localsdp}
+        ></textarea>
+        <Button
+          onClick={() => navigator.clipboard.writeText(localsdp)}
+          text="Copy SDP"
+        />
+      </div>
     </div>
   </div>
 </main>
