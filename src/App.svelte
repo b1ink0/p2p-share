@@ -1,6 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { file, status, sdp, currentId, receiveId } from "./store/store";
+  import {
+    file,
+    status,
+    sdp,
+    currentId,
+    receiveId,
+    manualMode,
+  } from "./store/store";
   import Button from "./components/Button.svelte";
   import {
     addAnswer,
@@ -11,9 +18,20 @@
     send,
     connect,
     receive,
+    createPeerConnection,
   } from "./lib/webrtc";
 
-  let manualMode = false;
+  let localManualMode = false;
+  manualMode.subscribe((value) => {
+    localManualMode = value;
+    if (!value) {
+      createPeerConnection();
+    }
+  });
+
+  const handleToggleManualMode = () => {
+    manualMode.set(!localManualMode);
+  };
 
   const handleFileChange = (e: any) => {
     file.set(e.target.files[0]);
@@ -51,11 +69,6 @@
     receiveId.set(e.target.value);
   };
 
-  //   const handleSend = async () =>
-
-  onMount(() => {
-    // createPeerConnection();
-  });
 </script>
 
 <main class="flex flex-col justify-center items-center w-full">
@@ -64,7 +77,7 @@
   >
     <h1 class="text-2xl font-medium">P2P File Transfer</h1>
     <div class="flex gap-4 flex-col justify-center items-center">
-      {#if manualMode}
+      {#if localManualMode}
         <div class="flex gap-3">
           <Button onClick={() => createOffer()} text="Create Peer Connection" />
           <Button onClick={() => createAnswer()} text="Connect to Peer" />
@@ -126,7 +139,7 @@
       </div>
       <div class="flex gap-4">
         <input
-          class="bg-transparent border-2 px-2 rounded-md"
+          class="bg-transparent border-2 px-2 rounded-md w-52"
           type="text"
           placeholder="Enter ID"
           value={localReceiveId}
@@ -134,7 +147,7 @@
         />
         <Button onClick={receive} text="Receive" />
       </div>
-      {#if manualMode}
+      {#if localManualMode}
         <div class="w-full flex justify-center items-center flex-col gap-3">
           <textarea
             class="border-2 rounded-md w-full h-32 p-2 bg-transparent"
@@ -149,12 +162,7 @@
     </div>
     <span class="block h-[2px] w-full bg-white mt-3"></span>
     <div class="flex gap-4">
-      <Button
-        onClick={() => {
-          manualMode = !manualMode;
-        }}
-        text="Toggle Manual Mode"
-      />
+      <Button onClick={handleToggleManualMode} text="Toggle Manual Mode" />
     </div>
   </div>
 </main>

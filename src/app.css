@@ -6,9 +6,6 @@ body {
   background-color: #271819;
   color: #d7d7d7;
   font-family: "Poppins", sans-serif;
-  display: flex;
-  justify-content: center;
-  align-items: center;
 }
 
 * {

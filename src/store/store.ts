@@ -42,3 +42,5 @@ export const stopCheckingForAnswer = writable<boolean>(false);
 
 export const receiveId = writable<string>("");
 
+export const manualMode = writable<boolean>(false);
+
