@@ -1,4 +1,5 @@
-import { peer, config } from "../store/store";
+import { get } from "svelte/store";
+import { peer, config, file, receiveData, status } from "../store/store";
 
 const createPeerConnection = (): void => {
   const localPeer = new RTCPeerConnection(config.rtcConfig as RTCConfiguration);
@@ -8,7 +9,7 @@ const createPeerConnection = (): void => {
     if (!event.candidate) return;
     console.log(localPeer.localDescription);
     // await requestServer({ candidate: event.candidate });
-  }
+  };
   peer.connection.set(localPeer);
 };
 
@@ -73,18 +74,65 @@ const createDataChannel = (
   });
   dataChannel.onopen = () => {
     console.log("Data channel is open");
+    status.connected.set(true);
   };
   dataChannel.onclose = () => {
     console.log("Data channel is closed");
+    status.connected.set(false);
   };
   dataChannel.onerror = (error) => {
     console.log("Data channel error:", error);
   };
+
   dataChannel.onmessage = (event) => {
-    console.log("Data channel message:", event.data);
+    if (typeof event.data === "string") {
+      const data = JSON.parse(event.data);
+      if (data.fileName && data.fileSize) {
+        receiveData.fileInfo.set(data);
+        receiveData.inProgress.set(true);
+        receiveData.bytesReceived.set(0);
+      }
+    } else {
+      receiveData.fileData.update((fileData) => {
+        const data = new Uint8Array(event.data);
+        const newData = fileData
+          ? new Uint8Array(fileData.length + data.length)
+          : data;
+        if (fileData) {
+          newData.set(fileData, 0);
+          newData.set(data, fileData.length);
+        }
+        receiveData.bytesReceived.update((bytesReceived) => {
+          return bytesReceived + data.length;
+        });
+        return newData;
+      });
+    }
   };
-  
+
+  receiveData.bytesReceived.subscribe((bytesReceived) => {
+    const fileInfo = get(receiveData.fileInfo);
+    if (!fileInfo) return;
+    status.progress.set(Math.floor((bytesReceived / fileInfo.fileSize) * 100));
+    // if (!fileInfo || !fileData) return;
+    if (bytesReceived === fileInfo?.fileSize) {
+      console.log("File received successfully");
+      status.received.set(true);
+    }
+  });
+
   return dataChannel;
+};
+
+const readNextChunk = (
+  fileReader: FileReader,
+  BYTES_PER_CHUNK: number,
+  file: File,
+  currentChunk: number
+) => {
+  var start = BYTES_PER_CHUNK * currentChunk;
+  var end = Math.min(file.size, start + BYTES_PER_CHUNK);
+  fileReader.readAsArrayBuffer(file.slice(start, end));
 };
 
 const send = (): void => {
@@ -92,8 +140,51 @@ const send = (): void => {
   dataChannel.subscribe((dataChannel) => {
     if (!dataChannel) return;
     console.log(dataChannel);
-    dataChannel.send("Hello, World!");
+    file.subscribe((file) => {
+      if (!file) return;
+      const BYTES_PER_CHUNK = 1200;
+      let currentChunk = 0;
+      let fileReader = new FileReader();
+
+      dataChannel.send(
+        JSON.stringify({
+          fileName: file.name,
+          fileSize: file.size,
+        })
+      );
+
+      fileReader.onload = () => {
+        dataChannel.send(fileReader.result);
+        currentChunk++;
+        receiveData.bytesReceived.update((bytesReceived) => {
+          return bytesReceived + BYTES_PER_CHUNK;
+        });
+        status.progress.set(
+          Math.floor(((currentChunk * BYTES_PER_CHUNK) / file.size) * 100)
+        );
+        if (BYTES_PER_CHUNK * currentChunk < file.size) {
+          readNextChunk(fileReader, BYTES_PER_CHUNK, file, currentChunk);
+        } else {
+          status.sent.set(true);
+          console.log("File sent successfully");
+        }
+      };
+
+      readNextChunk(fileReader, BYTES_PER_CHUNK, file, currentChunk);
+    });
   });
+};
+
+const saveFile = (): void => {
+  const fileData = get(receiveData.fileData);
+  const fileInfo = get(receiveData.fileInfo);
+  if (!fileData || !fileInfo) return;
+  const file = new Blob([fileData], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileInfo.fileName;
+  a.click();
 };
 
 const receive = (): void => {
@@ -104,6 +195,17 @@ const receive = (): void => {
   });
 };
 
+const reset = (): void => {
+  file.set(null);
+  receiveData.fileInfo.set(null);
+  receiveData.fileData.set(null);
+  receiveData.bytesReceived.set(0);
+  receiveData.inProgress.set(false);
+  status.progress.set(0);
+  status.received.set(false);
+  status.sent.set(false);
+};
+
 export {
   createPeerConnection,
   createDataChannel,
@@ -112,4 +214,6 @@ export {
   addAnswer,
   send,
   receive,
+  saveFile,
+  reset,
 };
