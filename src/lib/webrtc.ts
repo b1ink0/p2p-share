@@ -51,7 +51,13 @@ const createPeerConnection = (type: string = ""): void => {
     if (!event.candidate) return;
     console.log("onice", localPeer.localDescription);
     sdp.set(JSON.stringify(localPeer.localDescription));
-    if (type === "answer") return;
+    if (type === "answer") {
+      await postRequest(
+        { id: get(receiveId), answer: localPeer.localDescription },
+        "answer"
+      );
+      return;
+    }
     const id = generateId();
     currentId.set(id.toString());
     await postRequest({ id: id, offer: localPeer.localDescription }, "offer");
@@ -96,7 +102,7 @@ const createAnswer = async (offer: string = ""): Promise<void> => {
       await connection.setLocalDescription(answer);
       console.log(answer);
 
-      await postRequest({ id: get(receiveId), answer: answer }, "answer");
+      // await postRequest({ id: get(receiveId), answer: answer }, "answer");
     }, 1000);
   });
 };
